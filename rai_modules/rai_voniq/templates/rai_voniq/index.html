@@ -1,0 +1,552 @@
+<!DOCTYPE html> {% load static %}
+
+<html lang="en" dir="ltr">
+
+<script src="https://code.jquery.com/jquery-1.11.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bowser@2.5.3/es5.js"></script>
+<link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/css/bootstrap.min.css" rel="stylesheet" id="bootstrap-css">
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/js/bootstrap.min.js"></script>
+
+<link rel="stylesheet" href="{% static 'rai_voniq/CSS/style.css' %}" />
+
+<head>
+    <title>voice assistance</title>
+</head>
+
+<body>
+
+    <script src="https://unpkg.com/three@0.114.0/build/three.js"></script>
+    <script src="https://unpkg.com/three@0.114.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/three@0.114.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script type="module" src="https://unpkg.com/three@0.106.0/build/three.module.js"></script>
+    <script type="module" src="https://unpkg.com/three@0.106.0/examples/jsm/libs/stats.module.js"></script>
+    <script type="module" src="https://unpkg.com/three@0.106.0/examples/jsm/libs/dat.gui.module.js"></script>
+
+    <script>
+        const backgroundColor = 0xFFFFFF;
+        var container, stats, clock, gui, mixer, actions, activeAction, previousAction;
+        var camera, scene, renderer, model, face;
+
+        var api = {
+            state: 'Walking'
+        };
+
+        function openForm() {
+            document.getElementById("myForm").style.display = "block";
+        }
+
+        function closeForm() {
+            document.getElementById("myForm").style.display = "none";
+        }
+
+
+        init();
+
+        function init() {
+            container = document.createElement('div');
+            document.body.appendChild(container);
+
+            camera = new THREE.PerspectiveCamera(85, window.innerWidth / window.innerHeight, 1, 10000);
+            camera.position.set(0, 3, 7);
+            camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xFFFFFF);
+            scene.fog = new THREE.Fog(0xFFFFFF, 0, 650);
+
+            var clock = new THREE.Clock();
+
+            //Light
+            dirLight = new THREE.DirectionalLight(0xffffff, 2);
+            dirLight.color.setHSL(0.1, 1, 0.95);
+            dirLight.position.set(-0.3, 0.5, 0.5);
+            dirLight.position.multiplyScalar(30);
+            scene.add(dirLight);
+
+            dirLight.castShadow = true;
+
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+
+            var d = 350;
+
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+
+            dirLight.shadow.camera.far = 3500;
+            dirLight.shadow.bias = -0.0001;
+
+            // Ground
+            var groundGeo = new THREE.PlaneBufferGeometry(10000, 10000);
+            var groundMat = new THREE.MeshLambertMaterial({
+                color: 0x000000
+            });
+            groundMat.color.setRGB(0, 0, 0);
+
+            var ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.position.y = 0;
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            //Grid
+            var grid = new THREE.GridHelper(2000, 400, 0xFFFFFF, 0xFFFFFF);
+            grid.material.opacity = 0.2;
+            grid.material.transparent = true;
+            scene.add(grid);
+
+            var renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(backgroundColor);
+            document.body.appendChild(renderer.domElement);
+
+            var cubeMaterials_env = [
+                new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/space_env/space_ft.png'),
+                    side: THREE.DoubleSide
+                }),
+                new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/space_env/space_bk.png'),
+                    side: THREE.DoubleSide
+                }),
+                new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/space_env/space_up.png'),
+                    side: THREE.DoubleSide
+                }),
+                new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/space_env/space_dn.png'),
+                    side: THREE.DoubleSide
+                }),
+                new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/space_env/space_rt.png'),
+                    side: THREE.DoubleSide
+                }),
+                new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/space_env/space_lf.png'),
+                    side: THREE.DoubleSide
+                })
+            ];
+
+            var geometry_env = new THREE.BoxGeometry(150, 150, 150); // background enviroment
+            var material_env = new THREE.MeshFaceMaterial(cubeMaterials_env);
+            var cube_env = new THREE.Mesh(geometry_env, material_env);
+            cube_env.position.x = 0;
+            cube_env.position.y = 0;
+            cube_env.position.Z = 0;
+            scene.add(cube_env);
+
+            var cubeMaterials = [
+                new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/logo_upscaled.png'),
+                    side: THREE.DoubleSide
+                }),
+                new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/logo_upscaled.png'),
+                    side: THREE.DoubleSide
+                }),
+                new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/logo_upscaled.png'),
+                    side: THREE.DoubleSide
+                }),
+                new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/logo_upscaled.png'),
+                    side: THREE.DoubleSide
+                }),
+                new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/logo_upscaled.png'),
+                    side: THREE.DoubleSide
+                }),
+                new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/logo_upscaled.png'),
+                    side: THREE.DoubleSide
+                })
+            ];
+
+            var geometry = new THREE.BoxGeometry(1, 1, 1); //box logo
+            var material = new THREE.MeshFaceMaterial(cubeMaterials);
+            var cube = new THREE.Mesh(geometry, material);
+            cube.position.x = -9.3;
+            cube.position.y = 4.4;
+            cube.position.Z = -6;
+            scene.add(cube);
+
+            window.addEventListener('resize', function() {
+                var width = window.innerWidth;
+                var height = window.innerHeight;
+                renderer.setSize(width, height);
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+            })
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement)
+
+            var loader = new THREE.GLTFLoader();
+
+            loader.load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/RobotExpressive.glb', function(gltf) {
+
+                    model = gltf.scene;
+                    scene.add(model);
+
+                    var states = ['Idle', 'Walking', 'Running', 'Dance', 'Death', 'Sitting', 'Standing'];
+                    var emotes = ['Jump', 'Yes', 'No', 'Wave', 'Punch', 'ThumbsUp'];
+                    var motion = 0;
+
+                    mixer = new THREE.AnimationMixer(model);
+                    actions = {};
+
+                    for (var i = 0; i < gltf.animations.length; i++) {
+
+                        var clip = gltf.animations[i];
+                        var action = mixer.clipAction(clip);
+                        actions[clip.name] = action;
+
+                        if (emotes.indexOf(clip.name) >= 0 || states.indexOf(clip.name) >= 4) {
+                            action.clampWhenFinished = true;
+                            action.loop = THREE.LoopOnce;
+                        }
+                    }
+
+                    function createEmoteCallback(name) {
+                        api[name] = function() {
+                            fadeToAction(name, 0.2);
+                            mixer.addEventListener('finished', restoreState);
+                        };
+                    }
+
+                    function restoreState() {
+                        mixer.removeEventListener('finished', restoreState);
+                        fadeToAction(api.state, 0.2);
+                    }
+
+                    for (var i = 0; i < emotes.length; i++) {
+                        createEmoteCallback(emotes[i]);
+
+                    }
+
+                    face = model.getObjectByName('Head_2');
+                    var expressions = Object.keys(face.morphTargetDictionary);
+
+                    /*
+                     control chatbox
+                    */
+                    (function() { // “immediately-invoked function expressions” (IIFE).
+
+                        var result = bowser.getParser(navigator.userAgent).getResult(); //@var {class} result Get the data about bowser
+                        console.log(result.browser.name);
+
+                        if (result.browser.name == "Chrome") {
+                            $(".send_message").show();
+                            var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                            var recognition = new SpeechRecognition(); //created an instantiation of the speech recognition interface.
+
+                        } else {
+                            $(".send_message").hide()
+                        }
+
+                        var Textbox = $('.message_input'); //hold the text for display after the speech is converted to text.
+                        var Content = '';
+                        var enterMessageText;
+
+                        var Message = function(arg) { // function expression
+                            this.text = arg.text, this.message_side = arg.message_side;
+                            this.draw = function(_this) {
+                                return function() {
+                                    var $message;
+                                    $message = $($('.message_template').clone().html());
+                                    $message.addClass(_this.message_side).find('.text').html(_this.text);
+                                    $('.messages').append($message);
+                                    return setTimeout(function() {
+                                        return $message.addClass('appeared');
+                                    }, 0);
+                                };
+                            }(this);
+                            return this;
+                        };
+
+                        $(function() {
+                            var getMessageText, message_side, sendMessage;
+
+                            if (result.browser.name == "Chrome") {
+                                recognition.continuous = false
+                                recognition.onresult = function(e) {
+                                    Content = ''
+                                    var current = event.resultIndex;
+                                    var transcript = event.results[current][0].transcript;
+                                    Content += transcript;
+                                    Textbox.val(Content);
+                                    enterMessageText(e);
+                                };
+
+                            }
+
+                            if (Content.length) {
+                                Content += ' ';
+                            }
+
+                            Textbox.on('input', function() {
+                                Content = $(this).val();
+                            })
+
+                            getMessageText = function() {
+                                var $message_input;
+                                $message_input = $('.message_input');
+                                return $message_input.val();
+                            };
+
+                            sendMessage = function(text, isLeft) {
+                                var $messages, message;
+                                if (text.trim() === '') {
+                                    return;
+                                }
+                                $('.message_input').val('');
+                                $messages = $('.messages');
+                                message = new Message({
+                                    text: text,
+                                    message_side: isLeft
+                                });
+                                message.draw();
+                                return $messages.animate({
+                                    scrollTop: $messages.prop('scrollHeight')
+                                }, 300);
+                            };
+
+                            var enterMessageText = function(e) {
+
+                                var inputMassage = getMessageText();
+
+                                if (inputMassage != "") {
+                                    sendMessage(inputMassage, 'right');
+
+                                    // Get Data from chatbox
+                                    const Http = new XMLHttpRequest();
+                                    const url = (window.location.protocol + "//" + window.location.hostname + '/modules/voniq/passPara/?message=' + inputMassage);
+                                    console.log(url);
+                                    Http.open("GET", url);
+                                    Http.send();
+                                    Http.onreadystatechange = (e) => {
+                                        var input_word = Http.responseText;
+                                        input_word = input_word.toLowerCase();
+                                        if (Http.readyState == 4 && Http.status == 200) {
+                                            // var emotes = ['Jump', 'Yes', 'No', 'Wave', 'Punch', 'ThumbsUp'];
+                                            // state action
+                                            if (Http.responseText == "Ok man. As your wish!") {
+                                                api.state = "Idle";
+                                                fadeToAction(api.state, 0.5);
+                                            }
+                                            if (Http.responseText == "Let's get dance together! LaLaLaLa DeDooDe Da LaLaLaaaaaa LaLaLaLa DeDooDe Da LaLaLaaaaaa") {
+                                                api.state = "Dance";
+                                                fadeToAction(api.state, 0.5);
+                                            }
+
+                                            if (Http.responseText == "I like to walk burning calories.") {
+                                                api.state = "Walking";
+                                                fadeToAction(api.state, 0.1);
+
+                                            }
+                                            if (Http.responseText == "Running out of your heart is like I'm runing on the treadmill.") {
+                                                api.state = "Running";
+                                                fadeToAction(api.state, 0.5);
+                                            }
+                                            if (Http.responseText == "You are so cruel.") {
+                                                api.state = "Death";
+                                                fadeToAction(api.state, 0.5);
+                                            }
+                                            if (Http.responseText == "Thank you captain. I feel so stiff.") {
+                                                api.state = "Sitting";
+                                                fadeToAction(api.state, 0.5);
+                                            }
+                                            if (Http.responseText == "Yes Captain!") {
+                                                api.state = "Standing";
+                                                fadeToAction(api.state, 0.5);
+                                            }
+                                            // emotion
+                                            if (input_word.search("thanks") != -1) {
+                                                api.state = "ThumbsUp";
+                                                fadeToAction(api.state, 0.5);
+                                                api.state = "Walking";
+                                                setTimeout(function() {
+                                                    fadeToAction(api.state, 0.5);
+                                                }, 1500);
+                                            }
+                                            if (input_word.search("good") != -1) {
+                                                api.state = "ThumbsUp";
+                                                fadeToAction(api.state, 0.5);
+                                                api.state = "Walking";
+                                                setTimeout(function() {
+                                                    fadeToAction(api.state, 0.5);
+                                                }, 1500);
+                                            }
+
+
+                                            if (input_word.search("jump") != -1) {
+                                                api.state = "Jump";
+                                                fadeToAction(api.state, 0.5);
+                                                api.state = "Walking";
+                                                setTimeout(function() {
+                                                    fadeToAction(api.state, 0.5);
+                                                }, 1000);
+                                            }
+
+                                            if (input_word.search("cancel") != -1) {
+                                                api.state = "Punch";
+                                                fadeToAction(api.state, 0.5);
+                                                api.state = "Walking";
+                                                setTimeout(function() {
+                                                    fadeToAction(api.state, 0.5);
+                                                }, 1500);
+                                            }
+                                            if (input_word.search("rude") != -1) {
+                                                api.state = "No";
+                                                fadeToAction(api.state, 0.5);
+                                                api.state = "Walking";
+                                                setTimeout(function() {
+                                                    fadeToAction(api.state, 0.5);
+                                                }, 1500);
+                                            }
+
+                                            if (input_word.search("yes") != -1) {
+                                                api.state = "Yes";
+                                                fadeToAction(api.state, 0.5);
+                                                api.state = "Walking";
+                                                setTimeout(function() {
+                                                    fadeToAction(api.state, 0.5);
+                                                }, 1500);
+                                            }
+
+                                            if (input_word.search("hello") != -1) {
+                                                api.state = "Wave";
+                                                fadeToAction(api.state, 0.5);
+                                                api.state = "Walking";
+                                                setTimeout(function() {
+                                                    fadeToAction(api.state, 0.5);
+                                                }, 1500);
+                                            }
+                                            if (input_word.search("greet") != -1) {
+                                                api.state = "Wave";
+                                                fadeToAction(api.state, 0.5);
+                                                api.state = "Walking";
+                                                setTimeout(function() {
+                                                    fadeToAction(api.state, 0.5);
+                                                }, 1500);
+                                            }
+                                            // fadeToAction(api.state, 0.5);
+                                            if (result.browser.name == "Chrome") {
+                                                recognition.stop();
+                                                readOutLoud(Http.responseText)
+                                            }
+                                            sendMessage(Http.responseText, 'left');
+                                        }
+                                    }
+                                }
+                            }
+
+
+                            function readOutLoud(message) {
+                                var speech = new SpeechSynthesisUtterance();
+                                // Set the text and voice attributes.
+                                speech.text = message;
+                                speech.volume = 1;
+                                speech.rate = 1;
+                                speech.pitch = 1;
+
+                                window.speechSynthesis.speak(speech);
+                            }
+
+                            $('.message_input').keyup(function(e) {
+                                if (e.which === 13) {
+                                    enterMessageText(e);
+                                }
+                            });
+
+                            $('.send_message').click(function(e) {
+                                recognition.start();
+                            });
+                        });
+                    }.call(this));
+
+                    activeAction = actions[states[motion]];
+                    activeAction.play();
+                    motion = 0;
+
+                    function fadeToAction(name, duration) {
+
+                        previousAction = activeAction;
+                        activeAction = actions[name];
+
+                        if (previousAction !== activeAction) {
+                            previousAction.fadeOut(duration);
+                        }
+
+                        activeAction
+                            .reset()
+                            .setEffectiveTimeScale(1)
+                            .setEffectiveWeight(1)
+                            .fadeIn(duration)
+                            .play();
+
+                    }
+
+                    var update = function() {
+                        cube.rotation.x += 0.002;
+                        cube.rotation.y += 0.002;
+
+                        dt = clock.getDelta();
+                        mixer.update(dt);
+                    };
+
+                    var render = function() {
+                        renderer.render(scene, camera);
+                    };
+
+                    var GameLoop = function() {
+
+                        requestAnimationFrame(GameLoop);
+
+                        update();
+                        render();
+                    };
+
+                    GameLoop();
+
+                }, undefined,
+                function(error) {
+                    console.error(error);
+                });
+
+
+
+        };
+    </script>
+
+    <button class="open-button" onclick="openForm()"></button>
+    <div class="chat_window" id="myForm">
+        <div class="top_menu">
+            <div class="buttons">
+                <button type="button" class="button close" onclick="closeForm()"> </button>
+                <div class="button minimize"></div>
+                <div class="button maximize"></div>
+            </div>
+            <div class="title">Robotics and AI Lab</div>
+        </div>
+        <ul class="messages"></ul>
+        <div class="bottom_wrapper clearfix">
+            <div class="message_input_wrapper"><input class="message_input" placeholder="Type your message here..." />
+            </div>
+            <div class="send_message" id="send_message_">
+                <div class="icon"></div>
+            </div>
+        </div>
+    </div>
+    <div class="message_template">
+        <li class="message">
+            <div class="avatar"></div>
+            <div class="text_wrapper">
+                <div class="text"></div>
+            </div>
+        </li>
+    </div>
+</body>
+
+</html>
