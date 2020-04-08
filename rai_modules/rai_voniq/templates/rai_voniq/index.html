@@ -269,7 +269,7 @@
                             var getMessageText, message_side, sendMessage;
 
                             if (result.browser.name == "Chrome") {
-                                recognition.continuous = false
+                                recognition.continuous = true;
                                 recognition.onresult = function(e) {
                                     Content = ''
                                     var current = event.resultIndex;
@@ -312,7 +312,7 @@
                                 }, 300);
                             };
 
-                            var enterMessageText = function(e) {
+                            var enterMessageText = function(event) {
 
                                 var inputMassage = getMessageText();
 
@@ -433,8 +433,7 @@
                                             }
                                             // fadeToAction(api.state, 0.5);
                                             if (result.browser.name == "Chrome") {
-                                                recognition.stop();
-                                                readOutLoud(Http.responseText)
+                                                readOutLoud(Http.responseText, event)
                                             }
                                             sendMessage(Http.responseText, 'left');
                                         }
@@ -443,7 +442,7 @@
                             }
 
 
-                            function readOutLoud(message) {
+                            function readOutLoud(message, e) {
                                 var speech = new SpeechSynthesisUtterance();
                                 // Set the text and voice attributes.
                                 speech.text = message;
@@ -451,7 +450,16 @@
                                 speech.rate = 1;
                                 speech.pitch = 1;
 
+                                recognition.stop();
+
                                 window.speechSynthesis.speak(speech);
+                                if (e.which != 13) {
+                                    speech.onend = function(event) {
+                                        console.log('Utterance has finished being spoken after ' + event.elapsedTime + ' milliseconds.');
+                                        console.log();
+                                        recognition.start(e.which);
+                                    }
+                                }
                             }
 
                             $('.message_input').keyup(function(e) {
