@@ -4,5 +4,5 @@ urlpatterns = [
     path('', views.index),
     path('passPara/', views.passPara),
     path('hook', views.hook),
-    path('liff', views.liff),
+    path('invite', views.invite)
 ]
