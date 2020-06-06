@@ -54,7 +54,7 @@
             scene.background = new THREE.Color(0xFFFFFF);
             scene.fog = new THREE.Fog(0xFFFFFF, 0, 650);
 
-            clock = new THREE.Clock();
+            var clock = new THREE.Clock();
 
             //Light
             dirLight = new THREE.DirectionalLight(0xffffff, 2);
@@ -116,7 +116,7 @@
                     side: THREE.DoubleSide
                 }),
                 new THREE.MeshBasicMaterial({
-                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/space_env/space_bn.png'),
+                    map: new THREE.TextureLoader().load(window.location.protocol + "//" + window.location.hostname + '/static/rai_voniq/image/space_env/space_dn.png'),
                     side: THREE.DoubleSide
                 }),
                 new THREE.MeshBasicMaterial({
@@ -232,14 +232,22 @@
                      control chatbox
                     */
                     (function() { // “immediately-invoked function expressions” (IIFE).
-                        var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                        var recognition = new SpeechRecognition(); //created an instantiation of the speech recognition interface.
+
+                        var result = bowser.getParser(navigator.userAgent).getResult(); //@var {class} result Get the data about bowser
+                        console.log(result.browser.name);
+
+                        if (result.browser.name == "Chrome") {
+                            $(".send_message").show();
+                            var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                            var recognition = new SpeechRecognition(); //created an instantiation of the speech recognition interface.
+
+                        } else {
+                            $(".send_message").hide()
+                        }
+
                         var Textbox = $('.message_input'); //hold the text for display after the speech is converted to text.
                         var Content = '';
                         var enterMessageText;
-
-                        var result = bowser.getParser(navigator.userAgent).getResult(); //@var {class} result Get the data about bowser
-                        result.browser.name == "Chrome" ? $(".send_message").show() : $(".send_message").hide(); // use voice only Chrome
 
                         var Message = function(arg) { // function expression
                             this.text = arg.text, this.message_side = arg.message_side;
@@ -260,15 +268,18 @@
                         $(function() {
                             var getMessageText, message_side, sendMessage;
 
-                            recognition.continuous = false
-                            recognition.onresult = function(e) {
-                                Content = ''
-                                var current = event.resultIndex;
-                                var transcript = event.results[current][0].transcript;
-                                Content += transcript;
-                                Textbox.val(Content);
-                                enterMessageText(e);
-                            };
+                            if (result.browser.name == "Chrome") {
+                                recognition.continuous = true;
+                                recognition.onresult = function(e) {
+                                    Content = ''
+                                    var current = event.resultIndex;
+                                    var transcript = event.results[current][0].transcript;
+                                    Content += transcript;
+                                    Textbox.val(Content);
+                                    enterMessageText(e);
+                                };
+
+                            }
 
                             if (Content.length) {
                                 Content += ' ';
@@ -301,7 +312,7 @@
                                 }, 300);
                             };
 
-                            var enterMessageText = function(e) {
+                            var enterMessageText = function(event) {
 
                                 var inputMassage = getMessageText();
 
@@ -421,8 +432,9 @@
                                                 }, 1500);
                                             }
                                             // fadeToAction(api.state, 0.5);
-                                            recognition.stop();
-                                            readOutLoud(Http.responseText)
+                                            if (result.browser.name == "Chrome") {
+                                                readOutLoud(Http.responseText, event)
+                                            }
                                             sendMessage(Http.responseText, 'left');
                                         }
                                     }
@@ -430,7 +442,7 @@
                             }
 
 
-                            function readOutLoud(message) {
+                            function readOutLoud(message, e) {
                                 var speech = new SpeechSynthesisUtterance();
                                 // Set the text and voice attributes.
                                 speech.text = message;
@@ -438,7 +450,16 @@
                                 speech.rate = 1;
                                 speech.pitch = 1;
 
+                                recognition.stop();
+
                                 window.speechSynthesis.speak(speech);
+                                if (e.which != 13) {
+                                    speech.onend = function(event) {
+                                        console.log('Utterance has finished being spoken after ' + event.elapsedTime + ' milliseconds.');
+                                        console.log();
+                                        recognition.start(e.which);
+                                    }
+                                }
                             }
 
                             $('.message_input').keyup(function(e) {
@@ -457,49 +478,50 @@
                     activeAction.play();
                     motion = 0;
 
+                    function fadeToAction(name, duration) {
+
+                        previousAction = activeAction;
+                        activeAction = actions[name];
+
+                        if (previousAction !== activeAction) {
+                            previousAction.fadeOut(duration);
+                        }
+
+                        activeAction
+                            .reset()
+                            .setEffectiveTimeScale(1)
+                            .setEffectiveWeight(1)
+                            .fadeIn(duration)
+                            .play();
+
+                    }
+
+                    var update = function() {
+                        cube.rotation.x += 0.002;
+                        cube.rotation.y += 0.002;
+
+                        dt = clock.getDelta();
+                        mixer.update(dt);
+                    };
+
+                    var render = function() {
+                        renderer.render(scene, camera);
+                    };
+
+                    var GameLoop = function() {
+
+                        requestAnimationFrame(GameLoop);
+
+                        update();
+                        render();
+                    };
+
+                    GameLoop();
+
                 }, undefined,
                 function(error) {
                     console.error(error);
                 });
-
-
-            function fadeToAction(name, duration) {
-
-                previousAction = activeAction;
-                activeAction = actions[name];
-
-                if (previousAction !== activeAction) {
-                    previousAction.fadeOut(duration);
-                }
-
-                activeAction
-                    .reset()
-                    .setEffectiveTimeScale(1)
-                    .setEffectiveWeight(1)
-                    .fadeIn(duration)
-                    .play();
-
-            }
-
-            var update = function() {
-                cube.rotation.x += 0.002;
-                cube.rotation.y += 0.002;
-                var dt = clock.getDelta();
-                mixer.update(dt);
-            };
-            var render = function() {
-                renderer.render(scene, camera);
-            };
-
-            var GameLoop = function() {
-
-                requestAnimationFrame(GameLoop);
-
-                update();
-                render();
-            };
-
-            GameLoop();
         };
     </script>
 
@@ -517,7 +539,7 @@
         <div class="bottom_wrapper clearfix">
             <div class="message_input_wrapper"><input class="message_input" placeholder="Type your message here..." />
             </div>
-            <div class="send_message">
+            <div class="send_message" id="send_message_">
                 <div class="icon"></div>
             </div>
         </div>
@@ -531,6 +553,5 @@
         </li>
     </div>
 </body>
-<script src="{% static 'rai_voniq/JS/chatbox.js' %}"></script>
 
 </html>
